@@ -120,6 +120,54 @@ function ufw-docker--allow() {
     return 0
 }
 
+function ufw-docker--allow-ip() {
+    local SOURCE_IP="$1"
+    local INSTANCE_NAME="$2"
+    local INSTANCE_PORT="$3"
+    local PROTO="$4"
+    local NETWORK="${5:-}"
+    local NETWORK_ADDRESSES PORT_PROTO_LIST PROT_PROTO IP SUFFIX
+
+    if [[ -z "$SOURCE_IP" ]]; then
+        die "Source IP address cannot be empty."
+    fi
+
+    docker inspect "$INSTANCE_NAME" &>/dev/null ||
+        die "Docker instance \"$INSTANCE_NAME\" doesn't exist."
+
+    mapfile -t NETWORK_ADDRESSES < <(docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress|len}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address|len}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
+
+    [[ -z "${NETWORK_ADDRESSES:-}" ]] && die "Could not find a running instance \"$INSTANCE_NAME\"."
+
+    mapfile -t PORT_PROTO_LIST < <(docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" | remove_blank_lines)
+
+    if [[ -z "${PORT_PROTO_LIST:-}" ]]; then
+        err "\"$INSTANCE_NAME\" doesn't have any published ports."
+        return 1
+    fi
+
+    local count=0
+    for PORT_PROTO in "${PORT_PROTO_LIST[@]}"; do
+        if [[ -z "$INSTANCE_PORT" || "$PORT_PROTO" = "${INSTANCE_PORT}/${PROTO}" ]]; then
+            for item in "${NETWORK_ADDRESSES[@]}"; do
+                INSTANCE_NETWORK="${item% *}"
+                IP="${item#* }"
+                if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
+                    continue
+                fi
+                if [[ "$IP" = *:* ]]; then SUFFIX="/v6"; else SUFFIX=""; fi
+                ufw-docker--add-rule-from-ip "$SOURCE_IP" "${INSTANCE_NAME}${SUFFIX}" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
+                (( ++count ))
+            done
+        fi
+    done
+    if [[ "$count" -eq 0 ]]; then
+        err "Fail to add rule(s), cannot find the published port ${INSTANCE_PORT}/${PROTO} of instance \"${INSTANCE_NAME}\" or cannot update outdated rule(s)."
+        return 1
+    fi
+    return 0
+}
+
 function ufw-docker--add-service-rule() {
     declare service_id="$1"
     declare port="${2%/*}"
@@ -161,6 +209,35 @@ function ufw-docker--add-rule() {
         err "Remove outdated rule."
         ufw-docker--delete "$INSTANCE_NAME" "$PORT" "$PROTO" "$NETWORK"
     fi
+    echo ufw "${UFW_OPTS[@]}"
+    ufw "${UFW_OPTS[@]}"
+}
+
+function ufw-docker--add-rule-from-ip() {
+    local SOURCE_IP="$1"
+    local INSTANCE_NAME="$2"
+    local INSTANCE_IP_ADDRESS="$3"
+    local PORT="$4"
+    local PROTO="$5"
+    local NETWORK="${6:-}"
+
+    declare comment
+
+    echo "allow ${INSTANCE_NAME} from ${SOURCE_IP} ${PORT}/${PROTO} ${NETWORK}"
+    typeset -a UFW_OPTS
+    UFW_OPTS=(route allow proto "${PROTO}"
+              from "$SOURCE_IP" to "$INSTANCE_IP_ADDRESS")
+    comment="allow ${INSTANCE_NAME}"
+    [[ -n "$PORT" ]] && {
+        UFW_OPTS+=(port "${PORT}")
+        comment="$comment ${PORT}/${PROTO}"
+    }
+    [[ -n "$NETWORK" ]] && {
+        comment="$comment ${NETWORK}"
+    }
+    comment="$comment from:${SOURCE_IP}"
+    UFW_OPTS+=(comment "$comment")
+
     echo ufw "${UFW_OPTS[@]}"
     ufw "${UFW_OPTS[@]}"
 }
@@ -752,6 +829,7 @@ function ufw-docker--help() {
     cat <<-EOF >&2
 	Usage:
 	  ufw-docker <list|allow> [docker-instance-id-or-name [port[/tcp|/udp]] [network]]
+	  ufw-docker allow-ip <source-ip> <docker-instance-id-or-name> [port[/tcp|/udp]] [network]
 	  ufw-docker delete allow [docker-instance-id-or-name [port[/tcp|/udp]] [network]]
 
 	  ufw-docker service allow <swarm-service-id-or-name <port</tcp|/udp>>>
@@ -788,6 +866,10 @@ function ufw-docker--help() {
 	  ufw-docker allow httpd 80
 	  ufw-docker allow httpd 80/tcp
 	  ufw-docker allow httpd 80/tcp default
+
+	  ufw-docker allow-ip 1.2.3.4 httpd             # Allow IP 1.2.3.4 to access all ports of httpd
+	  ufw-docker allow-ip 1.2.3.4 httpd 80/tcp       # Allow IP 1.2.3.4 to access port 80/tcp of httpd
+	  ufw-docker allow-ip 10.0.0.0/8 httpd 80/tcp    # Allow subnet 10.0.0.0/8 to access port 80/tcp of httpd
 
 	  ufw-docker delete allow httpd
 	  ufw-docker delete allow httpd 80/tcp
@@ -1071,6 +1153,33 @@ case "$ufw_action" in
         ;;
     allow)
         "ufw-docker--$ufw_action" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO" "$NETWORK"
+        ;;
+    allow-ip)
+        shift || true
+
+        SOURCE_IP="${1:?Source IP address cannot be empty.}"
+        shift || true
+
+        INSTANCE_ID="${1:?Docker instance name/ID cannot be empty.}"
+        INSTANCE_NAME="$(ufw-docker--instance-name "$INSTANCE_ID")"
+        shift || true
+
+        INSTANCE_PORT="${1:-}"
+        if [[ -n "$INSTANCE_PORT" && ! "$INSTANCE_PORT" =~ [0-9]+(/(tcp|udp))? ]]; then
+            die "invalid port syntax: \"$INSTANCE_PORT\"."
+        fi
+
+        PROTO="$DEFAULT_PROTO"
+        if [[ "$INSTANCE_PORT" = */udp ]]; then
+            PROTO=udp
+        fi
+        shift || true
+
+        NETWORK="${1:-}"
+
+        INSTANCE_PORT="${INSTANCE_PORT%/*}"
+
+        ufw-docker--allow-ip "$SOURCE_IP" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO" "$NETWORK"
         ;;
     service|raw-command|add-service-rule|install-service)
         shift || true
