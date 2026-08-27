@@ -61,15 +61,16 @@ ufw_docker_parse_comment() {
 
 ufw_docker_parse_status_line() {
     local line="${1:-}"
-    local comment
+    local comment number=""
     ufw_docker_rule_reset
     [[ "$line" == *"# allow "* ]] || return 1
 
     if [[ "$line" =~ ^\[[[:blank:]]*([0-9]+)\] ]]; then
-        UFW_DOCKER_RULE_NUMBER="${BASH_REMATCH[1]}"
+        number="${BASH_REMATCH[1]}"
     fi
     comment="${line##*# allow }"
     ufw_docker_parse_comment "allow $comment" || return 1
+    UFW_DOCKER_RULE_NUMBER="$number"
     UFW_DOCKER_RULE_RAW="$line"
     return 0
 }
