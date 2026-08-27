@@ -73,7 +73,7 @@ if [[ -z "$MENU_MODULE_DIR" ]]; then
     fi
 fi
 
-for module in common validation ui docker rules system app extras; do
+for module in common validation ui docker rules system app extras installer; do
     module_path="$MENU_MODULE_DIR/$module.sh"
     if [[ ! -r "$module_path" ]]; then
         printf 'ERROR: missing menu module: %s\n' "$module_path" >&2
