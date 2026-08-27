@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Interactive menu for ufw-docker.
+# Project: https://github.com/wyyzcjw/ufw-docker
+
+set -uo pipefail
+
+MENU_VERSION="1.0.0"
+PROJECT_URL="https://github.com/wyyzcjw/ufw-docker"
+UPDATE_VERSION_URL="${UFW_DOCKER_MENU_UPDATE_URL:-https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/VERSION}"
+
+SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P)/$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+CORE_BIN="${UFW_DOCKER_BIN:-}"
+
+DRY_RUN="${UFW_DOCKER_MENU_DRY_RUN:-0}"
+TESTING="${UFW_DOCKER_MENU_TESTING:-0}"
+NO_AUTO_SUDO="${UFW_DOCKER_MENU_NO_AUTO_SUDO:-0}"
+LOCK_FILE="${UFW_DOCKER_MENU_LOCK_FILE:-/run/lock/ufw-docker-menu.lock}"
+
+INSTALL_BIN="/usr/local/bin/ufw-docker-menu"
+INSTALL_ALIAS="/usr/local/bin/ufd"
+INSTALL_DOC_DIR="/usr/local/share/doc/ufw-docker-menu"
+INSTALL_HELPER_DIR="/usr/local/lib/ufw-docker"
+INSTALL_MODULE_DIR="/usr/local/lib/ufw-docker-menu"
+SERVICE_NAME="ufw-docker"
+
+SELECTED_CONTAINER=""
+SELECTED_PORT_PROTO=""
+SELECTED_NETWORK=""
+SELECTED_SERVICE=""
+SELECTED_SERVICE_PORT=""
+
+PARSED_INSTANCE=""
+PARSED_PORT=""
+PARSED_PROTO=""
+PARSED_NETWORK=""
+PARSED_SOURCE=""
+PARSED_IS_V6="0"
+
+if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
+    C_RESET=$'\033[0m'
+    C_BOLD=$'\033[1m'
+    C_BLUE=$'\033[1;34m'
+    C_CYAN=$'\033[1;36m'
+    C_GREEN=$'\033[1;32m'
+    C_YELLOW=$'\033[1;33m'
+    C_ORANGE=$'\033[38;5;214m'
+    C_MAGENTA=$'\033[1;35m'
+    C_RED=$'\033[1;31m'
+    C_GRAY=$'\033[0;37m'
+else
+    C_RESET=""
+    C_BOLD=""
+    C_BLUE=""
+    C_CYAN=""
+    C_GREEN=""
+    C_YELLOW=""
+    C_ORANGE=""
+    C_MAGENTA=""
+    C_RED=""
+    C_GRAY=""
+fi
+
+MENU_MODULE_DIR="${UFW_DOCKER_MENU_LIB_DIR:-}"
+if [[ -z "$MENU_MODULE_DIR" ]]; then
+    if [[ -d "$SCRIPT_DIR/lib/ufw-docker-menu" ]]; then
+        MENU_MODULE_DIR="$SCRIPT_DIR/lib/ufw-docker-menu"
+    elif [[ -d "$INSTALL_MODULE_DIR" ]]; then
+        MENU_MODULE_DIR="$INSTALL_MODULE_DIR"
+    else
+        printf 'ERROR: ufw-docker-menu modules were not found.\n' >&2
+        return 1 2>/dev/null || exit 1
+    fi
+fi
+
+for module in common validation ui docker rules system app; do
+    module_path="$MENU_MODULE_DIR/$module.sh"
+    if [[ ! -r "$module_path" ]]; then
+        printf 'ERROR: missing menu module: %s\n' "$module_path" >&2
+        return 1 2>/dev/null || exit 1
+    fi
+    # shellcheck disable=SC1090
+    source "$module_path"
+done
+unset module module_path
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
