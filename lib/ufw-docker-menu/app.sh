@@ -6,6 +6,12 @@ show_menu_help() {
     cat <<EOF
 UFW-Docker 交互管理菜单 $MENU_VERSION
 
+一键运行：
+  bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh)
+
+永久安装：
+  bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh) --install
+
 用法：
   ufw-docker-menu
   ufw-docker-menu --help
@@ -79,7 +85,7 @@ self_test() {
     fi
 
     local module
-    for module in common validation ui docker rules system app extras; do
+    for module in common validation ui docker rules system app extras installer; do
         if [[ -r "$MENU_MODULE_DIR/$module.sh" ]]; then
             printf 'ok - module %s\n' "$module"
         else

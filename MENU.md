@@ -4,6 +4,42 @@
 
 项目地址：<https://github.com/wyyzcjw/ufw-docker>
 
+## 一键运行
+
+在 Linux VPS 上可以直接执行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh)
+```
+
+没有 `curl` 时：
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh)
+```
+
+默认只下载临时副本并进入菜单，不会自动启用 UFW、修改规则或重启防火墙。退出菜单后临时目录自动清理。
+
+永久安装：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh) --install
+```
+
+安装后直接运行：
+
+```bash
+sudo ufd
+```
+
+开发通道：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh) --dev
+```
+
+更多说明见 `ONE_CLICK_INSTALL.md`。
+
 ## 功能范围
 
 菜单覆盖当前项目的主要能力：
@@ -76,22 +112,18 @@ sudo ufd
 安装位置：
 
 ```text
+/usr/local/bin/ufw-docker
 /usr/local/bin/ufw-docker-menu
+/usr/local/bin/ufw-docker-rulectl
 /usr/local/bin/ufd
 /usr/local/share/doc/ufw-docker-menu/
 /usr/local/lib/ufw-docker/
+/usr/local/lib/ufw-docker-menu/
 ```
 
-最后一个目录用于复制仓库中存在的辅助脚本：
+如果系统尚未安装核心命令，并且当前菜单来自完整仓库/一键下载包，菜单安装器会同时复制 `ufw-docker` 核心二进制。若系统已经存在 `/usr/local/bin/ufw-docker`，菜单选项 99 不会静默覆盖它；需要升级核心时建议重新执行一键安装的 `--install` 模式。
 
-```text
-print-iptables.sh
-print-ip6tables.sh
-trace-iptables.sh
-trace-ip6tables.sh
-```
-
-仅安装菜单不会自动安装或启用 UFW-Docker 核心规则。
+安装菜单和核心程序文件不会自动启用 UFW-Docker 防火墙规则。
 
 ## 主菜单
 
@@ -252,6 +284,8 @@ NO_COLOR=1
 ```bash
 bash -n ufw-docker-menu
 NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 ./ufw-docker-menu --self-test
+bash -n install.sh
+bash install.sh --self-test
 ```
 
 项目测试入口会自动执行新增的测试文件：
@@ -265,6 +299,8 @@ NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 ./ufw-docker-menu --self-test
 ```bash
 sudo ufw-docker-menu --uninstall-menu
 ```
+
+该命令只卸载菜单和生命周期辅助工具，不自动删除 `/usr/local/bin/ufw-docker` 核心程序。
 
 完整卸载 UFW-Docker 请运行菜单并选择：
 

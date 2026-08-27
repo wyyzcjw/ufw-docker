@@ -60,7 +60,7 @@ DRY_RUN="$old_dry_run"
 [[ "$install_plan" == *"ufw-docker"* ]]
 [[ "$install_plan" == *"install"* ]]
 
-[[ "$(NO_COLOR=1 "$menu" --version)" == "1.2.1" ]]
+[[ "$(NO_COLOR=1 "$menu" --version)" == "1.3.0" ]]
 NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 "$menu" --self-test >/dev/null
 NO_COLOR=1 COLUMNS=120 "$menu" --print-main-menu | grep -Fq "UFW-DOCKER"
 
