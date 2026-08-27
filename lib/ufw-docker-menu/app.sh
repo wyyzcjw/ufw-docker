@@ -15,6 +15,11 @@ UFW-Docker 交互管理菜单 $MENU_VERSION
   sudo ufw-docker-menu --install-menu
   sudo ufw-docker-menu --uninstall-menu
 
+规则生命周期工具：
+  ufw-docker-rulectl list --format tsv
+  ufw-docker-rulectl delete --container NAME --source CIDR
+  ufw-docker-rulectl reload --dry-run
+
 环境变量：
   UFW_DOCKER_BIN                 指定 ufw-docker 核心脚本
   UFW_DOCKER_MENU_DRY_RUN=1      仅打印命令，不执行修改
@@ -74,7 +79,7 @@ self_test() {
     fi
 
     local module
-    for module in common validation ui docker rules system app; do
+    for module in common validation ui docker rules system app extras; do
         if [[ -r "$MENU_MODULE_DIR/$module.sh" ]]; then
             printf 'ok - module %s\n' "$module"
         else
@@ -82,6 +87,13 @@ self_test() {
             failed=1
         fi
     done
+
+    if [[ -r "$SCRIPT_DIR/lib/ufw-docker-rules.sh" || -r /usr/local/lib/ufw-docker/ufw-docker-rules.sh ]]; then
+        printf 'ok - lifecycle rule library\n'
+    else
+        printf 'not ok - lifecycle rule library missing\n' >&2
+        failed=1
+    fi
 
     if [[ -x "$SCRIPT_PATH" || "$TESTING" == "1" ]]; then
         printf 'ok - menu entrypoint available\n'
