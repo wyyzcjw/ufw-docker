@@ -53,7 +53,9 @@ managed_rule_lines() {
         ufw_docker_managed_status_lines
     else
         require_command ufw || return 1
-        ufw status numbered 2>/dev/null | grep -F '# allow ' || true
+        LC_ALL=C ufw status numbered 2>/dev/null |
+            grep -F 'ALLOW FWD' |
+            grep -F '# allow ' || true
     fi
 }
 
@@ -112,35 +114,51 @@ enhanced_reload_rules() {
     return 1
 }
 
+canonical_path() {
+    local path="${1:-}"
+    if command -v realpath >/dev/null 2>&1; then
+        realpath -m "$path" 2>/dev/null || printf '%s\n' "$path"
+    elif command -v readlink >/dev/null 2>&1; then
+        readlink -f "$path" 2>/dev/null || printf '%s\n' "$path"
+    else
+        printf '%s\n' "$path"
+    fi
+}
+
+install_if_different() {
+    local mode="${1:?missing mode}"
+    local source="${2:?missing source}"
+    local destination="${3:?missing destination}"
+    [[ -r "$source" ]] || return 0
+    if [[ "$(canonical_path "$source")" == "$(canonical_path "$destination")" ]]; then
+        return 0
+    fi
+    install -m "$mode" "$source" "$destination"
+}
+
 install_menu_command() {
     require_root "$@" || return 1
     local source_modules="$MENU_MODULE_DIR"
     mkdir -p "$INSTALL_MODULE_DIR" "$INSTALL_DOC_DIR" "$INSTALL_HELPER_DIR"
 
-    install -m 0755 "$SCRIPT_PATH" "$INSTALL_BIN"
+    install_if_different 0755 "$SCRIPT_PATH" "$INSTALL_BIN"
     local module
     for module in common validation ui docker rules system app extras; do
-        install -m 0644 "$source_modules/$module.sh" "$INSTALL_MODULE_DIR/$module.sh"
+        install_if_different 0644 "$source_modules/$module.sh" "$INSTALL_MODULE_DIR/$module.sh"
     done
     ln -sfn "$INSTALL_BIN" "$INSTALL_ALIAS"
 
-    [[ -r "$SCRIPT_DIR/MENU.md" ]] && install -m 0644 "$SCRIPT_DIR/MENU.md" "$INSTALL_DOC_DIR/MENU.md"
-    [[ -r "$SCRIPT_DIR/RULE_LIFECYCLE.md" ]] && install -m 0644 "$SCRIPT_DIR/RULE_LIFECYCLE.md" "$INSTALL_DOC_DIR/RULE_LIFECYCLE.md"
-    [[ -r "$SCRIPT_DIR/VERSION" ]] && install -m 0644 "$SCRIPT_DIR/VERSION" "$INSTALL_DOC_DIR/VERSION"
+    install_if_different 0644 "$SCRIPT_DIR/MENU.md" "$INSTALL_DOC_DIR/MENU.md"
+    install_if_different 0644 "$SCRIPT_DIR/RULE_LIFECYCLE.md" "$INSTALL_DOC_DIR/RULE_LIFECYCLE.md"
+    install_if_different 0644 "$SCRIPT_DIR/VERSION" "$INSTALL_DOC_DIR/VERSION"
 
     local helper
     for helper in print-iptables.sh print-ip6tables.sh trace-iptables.sh trace-ip6tables.sh; do
-        if [[ -r "$SCRIPT_DIR/$helper" ]]; then
-            install -m 0755 "$SCRIPT_DIR/$helper" "$INSTALL_HELPER_DIR/$helper"
-        fi
+        install_if_different 0755 "$SCRIPT_DIR/$helper" "$INSTALL_HELPER_DIR/$helper"
     done
 
-    if [[ -r "$SCRIPT_DIR/lib/ufw-docker-rules.sh" ]]; then
-        install -m 0644 "$SCRIPT_DIR/lib/ufw-docker-rules.sh" "$RULECTL_LIB"
-    fi
-    if [[ -r "$SCRIPT_DIR/ufw-docker-rulectl" ]]; then
-        install -m 0755 "$SCRIPT_DIR/ufw-docker-rulectl" "$RULECTL_BIN"
-    fi
+    install_if_different 0644 "$SCRIPT_DIR/lib/ufw-docker-rules.sh" "$RULECTL_LIB"
+    install_if_different 0755 "$SCRIPT_DIR/ufw-docker-rulectl" "$RULECTL_BIN"
 
     success "菜单已安装：$INSTALL_BIN"
     success "快捷命令：$INSTALL_ALIAS"
