@@ -25,8 +25,6 @@ lifecycle_available() {
     [[ -n "$LIFECYCLE_LIB" ]] && declare -F ufw_docker_parse_comment >/dev/null 2>&1
 }
 
-# Keep the menu parser and the standalone rulectl parser on exactly the same
-# comment grammar. These definitions intentionally override validation.sh.
 parse_rule_comment() {
     if ! lifecycle_available; then
         error "规则生命周期库不可用。"
@@ -78,9 +76,6 @@ trigger_agent_recreation() {
     fi
 }
 
-# Override rules.sh so both the menu and rulectl use the shared lifecycle
-# implementation. A failed recreation is reported; existing rules are never
-# automatically removed.
 enhanced_reload_rules() {
     lifecycle_available || {
         error "规则生命周期库不可用，无法执行增强重载。"
@@ -209,7 +204,7 @@ core_add_service_rule_prompt() {
     [[ -n "$service" ]] || { error "Service 不能为空。"; return 1; }
     printf '请输入 TargetPort/协议（例如 80/tcp）：'
     read -r port_proto || return 1
-    validate_port_proto "$port_proto" || {
+    [[ -n "$port_proto" ]] && validate_port_proto "$port_proto" || {
         error "端口格式无效：$port_proto"
         return 1
     }
@@ -269,8 +264,6 @@ advanced_core_menu() {
     done
 }
 
-# Override system.sh diagnostics to expose every remaining upstream/fork CLI
-# entry point that is not already represented by the primary menu.
 diagnostic_menu() {
     local choice
     while true; do
