@@ -47,6 +47,12 @@ parse_rule_comment "allow nginx/v6 80/tcp frontend from:2001:db8::/64"
 key="$(normalized_rule_key "allow nginx/v6 80/tcp frontend from:2001:db8::/64")"
 [[ "$key" == "nginx|80|tcp|frontend|2001:db8::/64" ]]
 
+declare -F advanced_core_menu >/dev/null
+declare -F core_raw_command_prompt >/dev/null
+declare -F core_add_service_rule_prompt >/dev/null
+declare -F enhanced_reload_rules >/dev/null
+
+[[ "$(NO_COLOR=1 "$menu" --version)" == "1.2.0" ]]
 NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 "$menu" --self-test >/dev/null
 NO_COLOR=1 COLUMNS=120 "$menu" --print-main-menu | grep -Fq "UFW-DOCKER"
 
