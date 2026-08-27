@@ -34,6 +34,7 @@ ufw_docker_parse_comment() {
     (( ${#tokens[@]} > 0 )) || return 1
 
     UFW_DOCKER_RULE_INSTANCE="${tokens[0]}"
+    [[ "$UFW_DOCKER_RULE_INSTANCE" =~ ^[-_.[:alnum:]]+$ ]] || return 1
     if [[ "$UFW_DOCKER_RULE_INSTANCE" == */v6 ]]; then
         UFW_DOCKER_RULE_INSTANCE="${UFW_DOCKER_RULE_INSTANCE%/v6}"
         UFW_DOCKER_RULE_IS_V6="1"
@@ -44,9 +45,13 @@ ufw_docker_parse_comment() {
         if [[ "$token" =~ ^([0-9]+)/(tcp|udp)$ ]]; then
             UFW_DOCKER_RULE_PORT="${BASH_REMATCH[1]}"
             UFW_DOCKER_RULE_PROTO="${BASH_REMATCH[2]}"
+            (( UFW_DOCKER_RULE_PORT >= 1 && UFW_DOCKER_RULE_PORT <= 65535 )) || return 1
         elif [[ "$token" == from:* ]]; then
+            [[ -z "$UFW_DOCKER_RULE_SOURCE" ]] || return 1
             UFW_DOCKER_RULE_SOURCE="${token#from:}"
+            [[ -n "$UFW_DOCKER_RULE_SOURCE" && "$UFW_DOCKER_RULE_SOURCE" != *[[:space:]]* ]] || return 1
         elif [[ -z "$UFW_DOCKER_RULE_NETWORK" ]]; then
+            [[ "$token" =~ ^[-_.[:alnum:]]+$ ]] || return 1
             UFW_DOCKER_RULE_NETWORK="$token"
         else
             return 1
@@ -122,7 +127,9 @@ ufw_docker_validate_port_proto() {
 }
 
 ufw_docker_managed_status_lines() {
-    ufw status numbered 2>/dev/null | grep -F '# allow ' || true
+    LC_ALL=C ufw status numbered 2>/dev/null |
+        grep -F 'ALLOW FWD' |
+        grep -F '# allow ' || true
 }
 
 ufw_docker_emit_tsv_header() {
