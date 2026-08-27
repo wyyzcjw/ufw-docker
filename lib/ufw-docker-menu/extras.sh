@@ -145,6 +145,7 @@ install_menu_command() {
 
     install_if_different 0644 "$SCRIPT_DIR/MENU.md" "$INSTALL_DOC_DIR/MENU.md"
     install_if_different 0644 "$SCRIPT_DIR/RULE_LIFECYCLE.md" "$INSTALL_DOC_DIR/RULE_LIFECYCLE.md"
+    install_if_different 0644 "$SCRIPT_DIR/COMMAND_COVERAGE.md" "$INSTALL_DOC_DIR/COMMAND_COVERAGE.md"
     install_if_different 0644 "$SCRIPT_DIR/VERSION" "$INSTALL_DOC_DIR/VERSION"
 
     local helper
@@ -251,6 +252,7 @@ advanced_core_menu() {
                 pause_screen
                 ;;
             2)
+                warn "继承的核心 man page 仍有少量 deny 文档遗留，实际 dispatcher 未实现 container deny。"
                 require_core && "$CORE_BIN" man 2>&1 || true
                 pause_screen
                 ;;
@@ -310,6 +312,73 @@ diagnostic_menu() {
             11) show_environment_report; pause_screen ;;
             12) raw_ufw_command; pause_screen ;;
             13) advanced_core_menu ;;
+            0) return ;;
+            *) warn "无效选择。"; pause_screen ;;
+        esac
+    done
+}
+
+core_install_system_safe() {
+    require_core || return 1
+    require_root "$@" || return 1
+
+    local repo_core="$SCRIPT_DIR/ufw-docker"
+    local system_core="/usr/local/bin/ufw-docker"
+
+    # Prefer the repository copy when available. It can safely copy itself to
+    # /usr/local/bin and install the bundled man page/service in one operation.
+    if [[ -x "$repo_core" && "$(canonical_path "$repo_core")" != "$(canonical_path "$system_core")" ]]; then
+        run_mutating_cmd "$repo_core" install --system
+        return $?
+    fi
+
+    # The upstream install --system implementation performs `cp "$0"` to the
+    # system path. Calling it from that exact path makes cp fail with
+    # "source and destination are the same file". Avoid that failure while
+    # preserving the important behavior: install rules + auto-reload service.
+    if [[ "$(canonical_path "$CORE_BIN")" == "$(canonical_path "$system_core")" ]]; then
+        warn "检测到核心已经位于 $system_core。"
+        warn "为避免核心脚本自复制到自身导致 cp 失败，将分两步执行 install + install-service。"
+        warn "本次不会重复安装 man page；现有核心命令、规则和 systemd 服务不受影响。"
+        printf '\n%s即将执行：%s\n' "$C_BOLD" "$C_RESET"
+        print_cmd "$CORE_BIN" install
+        print_cmd "$CORE_BIN" install-service --force
+        confirm "确认执行系统安装兼容流程？" || {
+            info "已取消。"
+            return 0
+        }
+        run_cmd "$CORE_BIN" install || return 1
+        run_cmd "$CORE_BIN" install-service --force
+        return $?
+    fi
+
+    run_mutating_cmd "$CORE_BIN" install --system
+}
+
+# Override system.sh option 5 so `install --system` remains usable after the
+# core has already been installed to /usr/local/bin.
+install_check_menu() {
+    local choice
+    require_core || { pause_screen; return; }
+    while true; do
+        clear_screen
+        render_banner
+        separator
+        say "  1. 检查规则（默认私有网段）"
+        say "  2. 检查规则（自动检测 Docker 子网）"
+        say "  3. 安装规则（默认私有网段）"
+        say "  4. 安装规则（自动检测 Docker 子网）"
+        say "  5. 安装规则 + 系统命令/Man page/自动重载服务"
+        say "  0. 返回"
+        separator
+        printf '选择：'
+        read -r choice || choice=0
+        case "$choice" in
+            1) require_root "$@" && core_exec check; pause_screen ;;
+            2) require_root "$@" && core_exec check --docker-subnets; pause_screen ;;
+            3) require_root "$@" && run_mutating_cmd "$CORE_BIN" install; pause_screen ;;
+            4) require_root "$@" && run_mutating_cmd "$CORE_BIN" install --docker-subnets; pause_screen ;;
+            5) core_install_system_safe; pause_screen ;;
             0) return ;;
             *) warn "无效选择。"; pause_screen ;;
         esac
