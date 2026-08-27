@@ -51,8 +51,16 @@ declare -F advanced_core_menu >/dev/null
 declare -F core_raw_command_prompt >/dev/null
 declare -F core_add_service_rule_prompt >/dev/null
 declare -F enhanced_reload_rules >/dev/null
+declare -F core_install_system_safe >/dev/null
 
-[[ "$(NO_COLOR=1 "$menu" --version)" == "1.2.0" ]]
+old_dry_run="$DRY_RUN"
+DRY_RUN=1
+install_plan="$(core_install_system_safe)"
+DRY_RUN="$old_dry_run"
+[[ "$install_plan" == *"ufw-docker"* ]]
+[[ "$install_plan" == *"install"* ]]
+
+[[ "$(NO_COLOR=1 "$menu" --version)" == "1.2.1" ]]
 NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 "$menu" --self-test >/dev/null
 NO_COLOR=1 COLUMNS=120 "$menu" --print-main-menu | grep -Fq "UFW-DOCKER"
 
