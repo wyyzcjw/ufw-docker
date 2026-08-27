@@ -34,11 +34,11 @@ ufw_docker_parse_comment() {
     (( ${#tokens[@]} > 0 )) || return 1
 
     UFW_DOCKER_RULE_INSTANCE="${tokens[0]}"
-    [[ "$UFW_DOCKER_RULE_INSTANCE" =~ ^[-_.[:alnum:]]+$ ]] || return 1
     if [[ "$UFW_DOCKER_RULE_INSTANCE" == */v6 ]]; then
         UFW_DOCKER_RULE_INSTANCE="${UFW_DOCKER_RULE_INSTANCE%/v6}"
         UFW_DOCKER_RULE_IS_V6="1"
     fi
+    [[ "$UFW_DOCKER_RULE_INSTANCE" =~ ^[-_.[:alnum:]]+$ ]] || return 1
     [[ -n "$UFW_DOCKER_RULE_INSTANCE" ]] || return 1
 
     for token in "${tokens[@]:1}"; do
