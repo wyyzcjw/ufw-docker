@@ -4,7 +4,7 @@
 
 set -uo pipefail
 
-MENU_VERSION="1.2.1"
+MENU_VERSION="1.3.0"
 PROJECT_URL="https://github.com/wyyzcjw/ufw-docker"
 UPDATE_VERSION_URL="${UFW_DOCKER_MENU_UPDATE_URL:-https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/VERSION}"
 
