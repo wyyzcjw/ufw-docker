@@ -60,7 +60,6 @@ EOF
 }
 
 cleanup() {
-    local rc=$?
     if [[ -n "$TMP_DIR" && -d "$TMP_DIR" ]]; then
         if [[ "$KEEP_TEMP" == "1" ]]; then
             warn "已保留临时目录：$TMP_DIR"
@@ -68,9 +67,10 @@ cleanup() {
             rm -rf -- "$TMP_DIR" || true
         fi
     fi
-    return "$rc"
 }
-trap cleanup EXIT INT TERM HUP
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
 
 require_linux() {
     [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || fatal "仅支持 Linux。"
@@ -109,7 +109,7 @@ download_file() {
     local url="$1" destination="$2"
     case "$DOWNLOADER" in
         curl) curl -fL --retry 3 --connect-timeout 10 --progress-bar -o "$destination" "$url" ;;
-        wget) wget --timeout=10 --tries=3 --show-progress -O "$destination" "$url" ;;
+        wget) wget --timeout=10 --tries=3 -O "$destination" "$url" ;;
         *) return 1 ;;
     esac
 }
@@ -123,10 +123,18 @@ latest_release_tag() {
     printf '%s\n' "$tag"
 }
 
+validate_ref() {
+    local ref="${1:-}"
+    [[ -n "$ref" ]] || return 1
+    [[ "$ref" =~ ^[A-Za-z0-9._/-]+$ ]] || return 1
+    [[ "$ref" != /* && "$ref" != *..* ]] || return 1
+}
+
 resolve_download() {
     local release_tag
 
     if [[ -n "$CUSTOM_REF" ]]; then
+        validate_ref "$CUSTOM_REF" || fatal "--ref 包含不安全或不支持的字符：$CUSTOM_REF"
         RESOLVED_REF="$CUSTOM_REF"
         RESOLVED_CHANNEL="custom"
         ARCHIVE_URL="https://codeload.github.com/${REPO}/tar.gz/${CUSTOM_REF}"
@@ -153,6 +161,7 @@ resolve_download() {
 }
 
 create_workspace() {
+    umask 077
     TMP_DIR="$(mktemp -d -t ufw-docker.XXXXXXXX)"
     SRC_DIR="$TMP_DIR/source"
     mkdir -p "$SRC_DIR"
@@ -172,6 +181,7 @@ verify_archive_and_extract() {
         lib/ufw-docker-menu/common.sh \
         lib/ufw-docker-menu/app.sh \
         lib/ufw-docker-menu/extras.sh \
+        lib/ufw-docker-menu/installer.sh \
         lib/ufw-docker-rules.sh; do
         [[ -r "$SRC_DIR/$required" ]] || fatal "下载内容不完整，缺少：$required"
     done
@@ -200,6 +210,7 @@ run_as_root() {
 }
 
 install_persistent() {
+    require_command install
     info "正在安装核心命令和交互菜单..."
     run_as_root install -d -m 0755 /usr/local/bin
     run_as_root install -m 0755 "$SRC_DIR/ufw-docker" /usr/local/bin/ufw-docker
@@ -228,6 +239,10 @@ self_test() {
     [[ "$REPO" == "wyyzcjw/ufw-docker" ]] || failed=1
     [[ "$RAW_INSTALL_URL" == https://raw.githubusercontent.com/* ]] || failed=1
     [[ "$API_LATEST_RELEASE" == https://api.github.com/* ]] || failed=1
+    validate_ref "v1.3.0" || failed=1
+    validate_ref "refs/heads/feature/example" || failed=1
+    validate_ref "abcdef0123456789" || failed=1
+    if validate_ref "https://example.com/x"; then failed=1; fi
     declare -F download_file >/dev/null || failed=1
     declare -F resolve_download >/dev/null || failed=1
     declare -F verify_archive_and_extract >/dev/null || failed=1
