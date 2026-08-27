@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+# Lifecycle manager for ufw-docker UFW comments, including allow-ip rules.
+set -uo pipefail
+
+RULECTL_VERSION="1.0.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+LIB_FILE="${UFW_DOCKER_RULES_LIB:-$SCRIPT_DIR/lib/ufw-docker-rules.sh}"
+if [[ ! -r "$LIB_FILE" && -r /usr/local/lib/ufw-docker/ufw-docker-rules.sh ]]; then
+    LIB_FILE=/usr/local/lib/ufw-docker/ufw-docker-rules.sh
+fi
+[[ -r "$LIB_FILE" ]] || {
+    printf 'ERROR: cannot find ufw-docker-rules.sh\n' >&2
+    exit 1
+}
+# shellcheck disable=SC1090
+source "$LIB_FILE"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  ufw-docker-rulectl list [filters] [--format text|tsv]
+  ufw-docker-rulectl status [filters] [--format text|tsv]
+  ufw-docker-rulectl delete [filters] [--yes|--dry-run]
+  ufw-docker-rulectl reload [--dry-run]
+  ufw-docker-rulectl parse
+  ufw-docker-rulectl version
+
+Filters:
+  --container NAME
+  --port PORT/tcp|udp
+  --network NAME
+  --source IP_OR_CIDR
+
+Notes:
+  - list/delete understand both normal comments and fork-specific from:SOURCE comments.
+  - delete only touches UFW rules carrying the '# allow ...' managed comment.
+  - reload deduplicates IPv4/v6 counterparts and calls ufw-docker allow/allow-ip.
+  - reload never deletes an old rule when re-application fails.
+EOF
+}
+
+resolve_core() {
+    local candidate
+    if [[ -n "${UFW_DOCKER_BIN:-}" && -x "$UFW_DOCKER_BIN" ]]; then
+        printf '%s\n' "$UFW_DOCKER_BIN"
+        return 0
+    fi
+    for candidate in "$SCRIPT_DIR/ufw-docker" "$(command -v ufw-docker 2>/dev/null || true)" /usr/local/bin/ufw-docker; do
+        [[ -n "$candidate" && -x "$candidate" ]] || continue
+        printf '%s\n' "$candidate"
+        return 0
+    done
+    return 1
+}
+
+require_root() {
+    if (( EUID != 0 )); then
+        printf 'ERROR: this operation requires root privileges.\n' >&2
+        return 1
+    fi
+}
+
+parse_filters() {
+    RULECTL_CONTAINER=""
+    RULECTL_PORT=""
+    RULECTL_NETWORK=""
+    RULECTL_SOURCE=""
+    RULECTL_FORMAT="text"
+    RULECTL_YES=0
+    RULECTL_DRY_RUN=0
+
+    while (( $# > 0 )); do
+        case "$1" in
+            --container)
+                (( $# >= 2 )) || return 2
+                RULECTL_CONTAINER="$2"; shift 2
+                ;;
+            --port)
+                (( $# >= 2 )) || return 2
+                RULECTL_PORT="$2"; shift 2
+                ;;
+            --network)
+                (( $# >= 2 )) || return 2
+                RULECTL_NETWORK="$2"; shift 2
+                ;;
+            --source)
+                (( $# >= 2 )) || return 2
+                RULECTL_SOURCE="$2"; shift 2
+                ;;
+            --format)
+                (( $# >= 2 )) || return 2
+                RULECTL_FORMAT="$2"; shift 2
+                ;;
+            --yes|-y)
+                RULECTL_YES=1; shift
+                ;;
+            --dry-run)
+                RULECTL_DRY_RUN=1; shift
+                ;;
+            --help|-h)
+                usage
+                return 10
+                ;;
+            *)
+                printf 'ERROR: unknown option: %s\n' "$1" >&2
+                return 2
+                ;;
+        esac
+    done
+
+    ufw_docker_validate_port_proto "$RULECTL_PORT" || {
+        printf 'ERROR: invalid --port value: %s\n' "$RULECTL_PORT" >&2
+        return 2
+    }
+    [[ "$RULECTL_FORMAT" == "text" || "$RULECTL_FORMAT" == "tsv" ]] || {
+        printf 'ERROR: --format must be text or tsv.\n' >&2
+        return 2
+    }
+}
+
+confirm_delete() {
+    local answer
+    [[ "$RULECTL_YES" == "1" || "$RULECTL_DRY_RUN" == "1" ]] && return 0
+    printf 'Delete all matching managed rules? [y/N]: '
+    read -r answer || return 1
+    [[ "$answer" =~ ^([yY]|[yY][eE][sS])$ ]]
+}
+
+cmd_list() {
+    parse_filters "$@" || {
+        local rc=$?
+        [[ $rc -eq 10 ]] && return 0
+        return "$rc"
+    }
+    ufw_docker_list_rules \
+        "$RULECTL_CONTAINER" "$RULECTL_PORT" "$RULECTL_NETWORK" "$RULECTL_SOURCE" "$RULECTL_FORMAT"
+}
+
+cmd_delete() {
+    parse_filters "$@" || {
+        local rc=$?
+        [[ $rc -eq 10 ]] && return 0
+        return "$rc"
+    }
+    require_root || return 1
+    confirm_delete || {
+        printf 'Cancelled.\n' >&2
+        return 0
+    }
+    ufw_docker_delete_rules \
+        "$RULECTL_CONTAINER" "$RULECTL_PORT" "$RULECTL_NETWORK" "$RULECTL_SOURCE" "$RULECTL_DRY_RUN"
+}
+
+cmd_reload() {
+    local dry_run=0
+    while (( $# > 0 )); do
+        case "$1" in
+            --dry-run) dry_run=1 ;;
+            --help|-h)
+                printf 'Usage: ufw-docker-rulectl reload [--dry-run]\n'
+                return 0
+                ;;
+            *)
+                printf 'ERROR: unknown reload option: %s\n' "$1" >&2
+                return 2
+                ;;
+        esac
+        shift
+    done
+    [[ "$dry_run" == "1" ]] || require_root || return 1
+    local core
+    core="$(resolve_core)" || {
+        printf 'ERROR: cannot find ufw-docker core command.\n' >&2
+        return 1
+    }
+    ufw_docker_reload_rules "$core" "$dry_run"
+}
+
+cmd_parse() {
+    local input
+    while IFS= read -r input; do
+        [[ -n "$input" ]] || continue
+        if [[ "$input" == *"# allow "* ]]; then
+            ufw_docker_parse_status_line "$input" || continue
+        else
+            ufw_docker_parse_comment "$input" || continue
+        fi
+        ufw_docker_emit_tsv_rule
+    done
+}
+
+main() {
+    local action="${1:-help}"
+    shift || true
+    case "$action" in
+        list|status) cmd_list "$@" ;;
+        delete) cmd_delete "$@" ;;
+        reload) cmd_reload "$@" ;;
+        parse) cmd_parse ;;
+        version|--version|-V) printf '%s\n' "$RULECTL_VERSION" ;;
+        help|--help|-h) usage ;;
+        *)
+            printf 'ERROR: unknown command: %s\n' "$action" >&2
+            usage >&2
+            return 2
+            ;;
+    esac
+}
+
+main "$@"
