@@ -6,6 +6,11 @@ SYSTEM_CORE_BIN="/usr/local/bin/ufw-docker"
 
 install_local_core_if_missing() {
     local local_core="$SCRIPT_DIR/ufw-docker"
+    command -v install >/dev/null 2>&1 || {
+        error "缺少 install 命令，无法安装系统文件。"
+        return 1
+    }
+    mkdir -p "$(dirname "$SYSTEM_CORE_BIN")"
     if [[ -x "$SYSTEM_CORE_BIN" ]]; then
         return 0
     fi
@@ -20,13 +25,17 @@ install_local_core_if_missing() {
 install_menu_command() {
     require_root "$@" || return 1
     local source_modules="$MENU_MODULE_DIR"
-    mkdir -p "$INSTALL_MODULE_DIR" "$INSTALL_DOC_DIR" "$INSTALL_HELPER_DIR"
+    command -v install >/dev/null 2>&1 || {
+        error "缺少 install 命令。"
+        return 1
+    }
+    mkdir -p "$(dirname "$INSTALL_BIN")" "$INSTALL_MODULE_DIR" "$INSTALL_DOC_DIR" "$INSTALL_HELPER_DIR"
 
     # A temporary one-click checkout disappears when the menu exits. Make the
     # persistent menu usable afterwards by copying the local core only when the
     # system does not already have one. Existing system cores are never silently
     # overwritten by menu option 99; the bootstrap --install mode handles updates.
-    install_local_core_if_missing
+    install_local_core_if_missing || return 1
 
     install_if_different 0755 "$SCRIPT_PATH" "$INSTALL_BIN"
     local module
