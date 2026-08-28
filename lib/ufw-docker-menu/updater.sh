@@ -126,7 +126,7 @@ root_update_build_args() {
 
 root_update_from_github() {
     local channel="${1:-stable}"
-    local tmp_dir bootstrap new_version=""
+    local tmp_dir bootstrap new_version="" old_umask
     local -a bootstrap_args=()
 
     [[ "$channel" == "stable" || "$channel" == "dev" ]] || {
@@ -160,11 +160,14 @@ root_update_from_github() {
         return 0
     }
 
+    old_umask="$(umask)"
     umask 077
-    tmp_dir="$(mktemp -d -t ufw-docker-update.XXXXXXXX)" || {
+    if ! tmp_dir="$(mktemp -d -t ufw-docker-update.XXXXXXXX)"; then
+        umask "$old_umask"
         error "创建临时目录失败。"
         return 1
-    }
+    fi
+    umask "$old_umask"
     bootstrap="$tmp_dir/install.sh"
 
     info "正在下载最新官方 install.sh ..."
