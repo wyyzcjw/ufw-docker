@@ -45,6 +45,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/in
 菜单覆盖当前项目的主要能力：
 
 - UFW、Docker、iptables 后端、systemd 服务和已管理规则总览；
+- 响应式规则面板：手机卡片、紧凑表格、完整表格；
+- 规则按容器分组、公开 `ANY` / 指定来源 / 异常规则筛选；
+- UFW 目标 IP 与 Docker 当前容器地址健康检查；
 - 自动列出运行中容器、容器端口、宿主机映射、Docker 网络和容器地址；
 - 调用 `ufw-docker allow` 放行容器端口；
 - 调用 `ufw-docker allow-ip` 按来源 IP/CIDR 放行；
@@ -191,14 +194,45 @@ ufw-docker allow-ip 192.0.2.10 nginx 80/tcp frontend
 
 当前核心 `allow-ip` 会遍历容器网络的 IPv4 和 IPv6 地址。菜单检测到双栈网络时会提示先在测试环境验证地址族行为。
 
-## 查询和删除
+## 规则视图、查询与删除
 
-菜单提供两条路径：
+从 v1.4.0 起，默认规则页先解析 UFW-Docker 注释，不再直接把长 `ufw status numbered` 行作为主要界面。
 
-1. 调用核心 `ufw-docker list`，按容器、端口和网络查询；
-2. 读取 `ufw status numbered` 中带 `# allow` 注释的所有规则。
+自动视图规则：
 
-第二种方式可以覆盖带 `from:` 的来源 IP 规则。删除时按 UFW 编号从大到小执行，避免编号变化影响后续删除。
+```text
+< 80 列      手机卡片
+80-109 列    紧凑表格
+>= 110 列    完整表格
+```
+
+手机卡片示例：
+
+```text
+[#30] hindsight  [正常]
+  8888/tcp <- 104.224.155.35
+  net hindsight_default
+  dst 172.19.0.2
+```
+
+规则管理菜单提供：
+
+1. 按容器分组查看；
+2. 全部规则响应式列表；
+3. 仅公开 `ANY` 规则；
+4. 仅指定来源 IP/CIDR 规则；
+5. 异常/失效规则；
+6. 容器名称关键字搜索；
+7. 删除规则；
+8. Reload / 修复；
+9. 原始 `ufw status numbered`；
+10. 核心 CLI / `ufw-docker-rulectl` 高级入口。
+
+菜单会比较 UFW 规则目标 IP 与 Docker 当前容器网络地址，并标记：`正常`、`IP已变化`、`容器不存在`、`容器已停止`、`Swarm` 或 `未验证`。
+
+按编号删除时，菜单会先确认编号属于当前 UFW-Docker 已管理规则，避免把普通 UFW 规则误删。删除某容器全部规则时，容器选择列表来自已有规则，因此即使容器已经被删除，仍能清理遗留规则。
+
+完整说明见 `RULE_VIEW.md`。
 
 ## 增强重载
 
@@ -236,6 +270,7 @@ ufw-docker allow-ip ...
 - 检测 SSH 会话并提示当前服务端口；
 - 不自动执行 `ufw enable`；
 - 增强重载失败时不删除旧规则；
+- 删除编号先验证属于 UFW-Docker 已管理规则；
 - 更新功能只检查版本，不以 root 权限下载并覆盖脚本；
 - raw UFW 入口不解释管道、重定向或命令替换。
 
@@ -270,6 +305,12 @@ UFW_DOCKER_MENU_LOCK_FILE
 UFW_DOCKER_MENU_UPDATE_URL
     覆盖只读版本检查地址。
 
+UFW_DOCKER_MENU_RULE_VIEW
+    强制规则视图：auto、card、compact 或 full。
+
+UFW_DOCKER_MENU_RULE_HEALTH_CHECK=0
+    关闭 Docker 实时规则健康检查，只显示规则结构。
+
 UFW_DOCKER_MENU_TESTING=1
     测试模式，跳过暂停、root 检查和锁。
 
@@ -286,6 +327,7 @@ bash -n ufw-docker-menu
 NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 ./ufw-docker-menu --self-test
 bash -n install.sh
 bash install.sh --self-test
+bash test/rule-view.test.sh
 ```
 
 项目测试入口会自动执行新增的测试文件：
