@@ -69,7 +69,7 @@ render_main_menu() {
     menu_row "${C_GREEN}6. 容器/端口/网络信息  ▶${C_RESET}" \
              "${C_GREEN}12. 帮助与项目说明${C_RESET}"
     separator
-    menu_row "${C_BLUE}00. 检查菜单更新${C_RESET}" \
+    menu_row "${C_BLUE}00. 检查 / 更新菜单${C_RESET}" \
              "${C_MAGENTA}90. 卸载 UFW-Docker${C_RESET}"
     menu_row "${C_GRAY}99. 安装菜单快捷命令${C_RESET}" \
              "${C_RED}88. 退出${C_RESET}"

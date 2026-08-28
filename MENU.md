@@ -58,6 +58,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/in
 - Docker Swarm 服务放行、删除和 `ufw-docker-agent` 查看；
 - IPv4/IPv6 iptables 打印、数据包跟踪、UFW 日志和环境报告；
 - 原始 UFW 命令与内部 `add-service-rule` 高级入口；
+- 菜单内版本检查，以及经确认的 Root 直接下载安装稳定版/master；
 - 完整卸载和菜单自身安装/卸载。
 
 ## 环境要求
@@ -68,6 +69,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/in
 - Docker；
 - UFW；
 - `ufw-docker` 核心脚本；
+- 菜单内在线更新需要 `curl` 或 `wget`；
 - 自动重载服务管理需要 systemd。
 
 菜单可以在依赖缺失时显示环境状态，但具体动作仍受核心命令的前置条件约束。
@@ -124,7 +126,7 @@ sudo ufd
 /usr/local/lib/ufw-docker-menu/
 ```
 
-如果系统尚未安装核心命令，并且当前菜单来自完整仓库/一键下载包，菜单安装器会同时复制 `ufw-docker` 核心二进制。若系统已经存在 `/usr/local/bin/ufw-docker`，菜单选项 99 不会静默覆盖它；需要升级核心时建议重新执行一键安装的 `--install` 模式。
+如果系统尚未安装核心命令，并且当前菜单来自完整仓库/一键下载包，菜单安装器会同时复制 `ufw-docker` 核心二进制。若系统已经存在 `/usr/local/bin/ufw-docker`，菜单选项 99 不会静默覆盖它；需要升级核心时可以使用菜单 `00. 检查 / 更新菜单`，或重新执行一键安装的 `--install` 模式。
 
 安装菜单和核心程序文件不会自动启用 UFW-Docker 防火墙规则。
 
@@ -140,9 +142,39 @@ sudo ufd
 5. 重载与修复规则               11. 诊断与调试工具
 6. 容器/端口/网络信息           12. 帮助与项目说明
 
-00. 检查菜单更新                90. 卸载 UFW-Docker
+00. 检查 / 更新菜单             90. 卸载 UFW-Docker
 99. 安装菜单快捷命令            88. 退出
 ```
+
+## 菜单内 Root 更新
+
+从 v1.5.0 起，菜单 `00` 同时负责版本检查和程序文件更新：
+
+```text
+1. 重新检查远程版本
+2. Root 直接下载安装稳定版（推荐）
+3. Root 直接下载安装 master 开发版
+4. 查看手动更新命令
+0. 返回主菜单
+```
+
+“稳定版”会调用官方 bootstrap 的 `--install --no-run`。存在正式 GitHub Release 时优先安装最新 Release；当前没有 Release 时按 bootstrap 既有策略回退到 `master`。“master 开发版”额外传入 `--dev`，明确安装当前 master。
+
+Root 更新不会直接执行网络管道中的 Shell 内容。菜单会把固定官方地址的 `install.sh` 下载到权限收紧的临时目录，检查仓库身份标记，执行 `bash -n` 和 bootstrap `--self-test`，全部通过并经用户确认后才运行安装。
+
+Root 可执行更新源固定为：
+
+```text
+https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh
+```
+
+`UFW_DOCKER_MENU_UPDATE_URL` 只改变只读的 `VERSION` 检查地址，不会改变 Root 更新脚本来源。更新只覆盖程序文件，不会自动执行 `ufw enable`、修改现有 UFW 规则或重启 UFW。安装使用 `--no-run`，因此更新后请退出当前旧菜单进程并重新执行：
+
+```bash
+sudo ufd
+```
+
+完整安全流程见 `UPDATE.md`。
 
 ## 容器端口规则
 
@@ -271,7 +303,8 @@ ufw-docker allow-ip ...
 - 不自动执行 `ufw enable`；
 - 增强重载失败时不删除旧规则；
 - 删除编号先验证属于 UFW-Docker 已管理规则；
-- 更新功能只检查版本，不以 root 权限下载并覆盖脚本；
+- Root 更新只执行固定官方 GitHub 地址下载的 bootstrap，并在执行前检查身份、语法和自检；
+- Root 更新使用 `--no-run`，不在当前菜单进程中静默切换代码版本；
 - raw UFW 入口不解释管道、重定向或命令替换。
 
 远程服务器操作建议保留第二个 SSH 会话，并先确认 SSH 服务端口规则。
@@ -303,7 +336,7 @@ UFW_DOCKER_MENU_LOCK_FILE
     覆盖默认锁文件路径。
 
 UFW_DOCKER_MENU_UPDATE_URL
-    覆盖只读版本检查地址。
+    覆盖只读 VERSION 检查地址；不会改变 Root 可执行更新源。
 
 UFW_DOCKER_MENU_RULE_VIEW
     强制规则视图：auto、card、compact 或 full。
@@ -328,6 +361,7 @@ NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 ./ufw-docker-menu --self-test
 bash -n install.sh
 bash install.sh --self-test
 bash test/rule-view.test.sh
+bash test/update-center.test.sh
 ```
 
 项目测试入口会自动执行新增的测试文件：

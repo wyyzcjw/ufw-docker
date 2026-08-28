@@ -4,7 +4,7 @@
 
 set -uo pipefail
 
-MENU_VERSION="1.4.0"
+MENU_VERSION="1.5.0"
 PROJECT_URL="https://github.com/wyyzcjw/ufw-docker"
 UPDATE_VERSION_URL="${UFW_DOCKER_MENU_UPDATE_URL:-https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/VERSION}"
 
@@ -73,7 +73,7 @@ if [[ -z "$MENU_MODULE_DIR" ]]; then
     fi
 fi
 
-for module in common validation ui docker rules system app extras ruleview installer; do
+for module in common validation ui docker rules system app extras ruleview installer updater; do
     module_path="$MENU_MODULE_DIR/$module.sh"
     if [[ ! -r "$module_path" ]]; then
         printf 'ERROR: missing menu module: %s\n' "$module_path" >&2

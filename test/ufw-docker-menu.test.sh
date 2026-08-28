@@ -55,6 +55,18 @@ declare -F core_install_system_safe >/dev/null
 declare -F show_grouped_rules >/dev/null
 declare -F collect_rule_stats >/dev/null
 declare -F rule_health_eval >/dev/null
+declare -F check_updates >/dev/null
+declare -F root_update_from_github >/dev/null
+declare -F update_remote_version >/dev/null
+
+version_is_newer "1.5.0" "1.4.0"
+! version_is_newer "1.4.0" "1.5.0"
+! version_is_newer "1.5.0" "1.5.0"
+
+mapfile -t stable_args < <(root_update_build_args stable)
+[[ "${stable_args[*]}" == "--install --no-run" ]]
+mapfile -t dev_args < <(root_update_build_args dev)
+[[ "${dev_args[*]}" == "--install --no-run --dev" ]]
 
 rule_parse_line "[33] 172.19.0.2 8888/tcp ALLOW FWD Anywhere # allow hindsight 8888/tcp hindsight_default"
 [[ "$RULEVIEW_NUMBER" == "33" ]]
@@ -70,8 +82,9 @@ DRY_RUN="$old_dry_run"
 [[ "$install_plan" == *"ufw-docker"* ]]
 [[ "$install_plan" == *"install"* ]]
 
-[[ "$(NO_COLOR=1 "$menu" --version)" == "1.4.0" ]]
+[[ "$(NO_COLOR=1 "$menu" --version)" == "1.5.0" ]]
 NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 "$menu" --self-test >/dev/null
 NO_COLOR=1 COLUMNS=120 "$menu" --print-main-menu | grep -Fq "UFW-DOCKER"
+NO_COLOR=1 COLUMNS=120 "$menu" --print-main-menu | grep -Fq "检查 / 更新菜单"
 
 printf "ufw-docker-menu tests passed\n"
