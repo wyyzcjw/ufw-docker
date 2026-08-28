@@ -12,6 +12,9 @@ UFW-Docker 交互管理菜单 $MENU_VERSION
 永久安装：
   bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh) --install
 
+菜单内更新：
+  主菜单 00 -> Root 直接下载安装稳定版或 master 开发版
+
 用法：
   ufw-docker-menu
   ufw-docker-menu --help
@@ -37,7 +40,7 @@ UFW-Docker 交互管理菜单 $MENU_VERSION
   UFW_DOCKER_MENU_DRY_RUN=1           仅打印命令，不执行修改
   UFW_DOCKER_MENU_NO_AUTO_SUDO=1      禁止自动 sudo 重启
   UFW_DOCKER_MENU_LOCK_FILE           自定义实例锁文件
-  UFW_DOCKER_MENU_UPDATE_URL          自定义版本检查地址
+  UFW_DOCKER_MENU_UPDATE_URL          自定义只读版本检查地址
   UFW_DOCKER_MENU_RULE_VIEW           auto|card|compact|full
   UFW_DOCKER_MENU_RULE_HEALTH_CHECK=0 禁用 Docker 规则健康检查
   UFW_DOCKER_MENU_TESTING=1           测试模式
@@ -105,7 +108,7 @@ self_test() {
     fi
 
     local module
-    for module in common validation ui docker rules system app extras ruleview installer; do
+    for module in common validation ui docker rules system app extras ruleview installer updater; do
         if [[ -r "$MENU_MODULE_DIR/$module.sh" ]]; then
             printf 'ok - module %s\n' "$module"
         else
@@ -129,6 +132,21 @@ self_test() {
         printf 'not ok - rule stats collector\n' >&2
         failed=1
     }
+    declare -F check_updates >/dev/null 2>&1 || {
+        printf 'not ok - update center\n' >&2
+        failed=1
+    }
+    declare -F root_update_from_github >/dev/null 2>&1 || {
+        printf 'not ok - root updater\n' >&2
+        failed=1
+    }
+    self_test_assert "semantic version newer" version_is_newer "1.5.0" "1.4.0" || failed=1
+    if version_is_newer "1.4.0" "1.5.0"; then
+        printf 'not ok - semantic version downgrade rejected\n' >&2
+        failed=1
+    else
+        printf 'ok - semantic version downgrade rejected\n'
+    fi
 
     if [[ -x "$SCRIPT_PATH" || "$TESTING" == "1" ]]; then
         printf 'ok - menu entrypoint available\n'
