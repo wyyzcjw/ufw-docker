@@ -26,14 +26,22 @@ UFW-Docker 交互管理菜单 $MENU_VERSION
   ufw-docker-rulectl delete --container NAME --source CIDR
   ufw-docker-rulectl reload --dry-run
 
+规则视图：
+  < 80 列     手机卡片视图
+  80-109 列   紧凑表格
+  >= 110 列   完整表格
+  菜单会检测容器当前 IP，并标记 IP 已变化、容器不存在或已停止的规则。
+
 环境变量：
-  UFW_DOCKER_BIN                 指定 ufw-docker 核心脚本
-  UFW_DOCKER_MENU_DRY_RUN=1      仅打印命令，不执行修改
-  UFW_DOCKER_MENU_NO_AUTO_SUDO=1 禁止自动 sudo 重启
-  UFW_DOCKER_MENU_LOCK_FILE      自定义实例锁文件
-  UFW_DOCKER_MENU_UPDATE_URL     自定义版本检查地址
-  UFW_DOCKER_MENU_TESTING=1      测试模式
-  NO_COLOR=1                     禁用 ANSI 颜色
+  UFW_DOCKER_BIN                      指定 ufw-docker 核心脚本
+  UFW_DOCKER_MENU_DRY_RUN=1           仅打印命令，不执行修改
+  UFW_DOCKER_MENU_NO_AUTO_SUDO=1      禁止自动 sudo 重启
+  UFW_DOCKER_MENU_LOCK_FILE           自定义实例锁文件
+  UFW_DOCKER_MENU_UPDATE_URL          自定义版本检查地址
+  UFW_DOCKER_MENU_RULE_VIEW           auto|card|compact|full
+  UFW_DOCKER_MENU_RULE_HEALTH_CHECK=0 禁用 Docker 规则健康检查
+  UFW_DOCKER_MENU_TESTING=1           测试模式
+  NO_COLOR=1                          禁用 ANSI 颜色
 
 项目：$PROJECT_URL
 EOF
@@ -84,8 +92,20 @@ self_test() {
         failed=1
     fi
 
+    if rule_parse_line "[ 7] 172.19.0.2 80/tcp ALLOW FWD 192.0.2.10 # allow nginx 80/tcp frontend from:192.0.2.10" &&
+       [[ "$RULEVIEW_NUMBER" == "7" ]] &&
+       [[ "$RULEVIEW_CONTAINER" == "nginx" ]] &&
+       [[ "$RULEVIEW_PORT_PROTO" == "80/tcp" ]] &&
+       [[ "$RULEVIEW_SOURCE" == "192.0.2.10" ]] &&
+       [[ "$RULEVIEW_TARGET" == "172.19.0.2" ]]; then
+        printf 'ok - responsive rule record parser\n'
+    else
+        printf 'not ok - responsive rule record parser\n' >&2
+        failed=1
+    fi
+
     local module
-    for module in common validation ui docker rules system app extras installer; do
+    for module in common validation ui docker rules system app extras ruleview installer; do
         if [[ -r "$MENU_MODULE_DIR/$module.sh" ]]; then
             printf 'ok - module %s\n' "$module"
         else
@@ -100,6 +120,15 @@ self_test() {
         printf 'not ok - lifecycle rule library missing\n' >&2
         failed=1
     fi
+
+    declare -F show_grouped_rules >/dev/null 2>&1 || {
+        printf 'not ok - grouped rule view\n' >&2
+        failed=1
+    }
+    declare -F collect_rule_stats >/dev/null 2>&1 || {
+        printf 'not ok - rule stats collector\n' >&2
+        failed=1
+    }
 
     if [[ -x "$SCRIPT_PATH" || "$TESTING" == "1" ]]; then
         printf 'ok - menu entrypoint available\n'

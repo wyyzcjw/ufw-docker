@@ -1,8 +1,8 @@
 # UFW-Docker Interactive Manager
 
-基于 [chaifeng/ufw-docker](https://github.com/chaifeng/ufw-docker) 的增强版，增加交互式管理菜单、来源 IP/CIDR 规则生命周期管理、诊断工具，以及适合 VPS 使用的一键下载运行方式。
+基于 [chaifeng/ufw-docker](https://github.com/chaifeng/ufw-docker) 的增强版，增加交互式管理菜单、来源 IP/CIDR 规则生命周期管理、响应式规则面板、诊断工具，以及适合 VPS 使用的一键下载运行方式。
 
-当前工具版本：`1.3.0`
+当前工具版本：`1.4.0`
 
 ## 一键运行
 
@@ -60,7 +60,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/in
 指定 tag、commit 或 ref：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh) --ref v1.3.0
+bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh) --ref <tag-or-commit>
 ```
 
 当前仓库尚未建立正式 GitHub Release，因此默认稳定通道会暂时回退到 `master`。未来建立 Release 后，同一条一键命令会优先下载最新稳定 Release。
@@ -83,11 +83,27 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/in
 
 菜单会自动发现 Docker 容器、已发布端口、宿主机映射、Docker 网络和容器地址。传给 `ufw-docker` 的始终是**容器端口**，而不是宿主机映射端口。
 
+### 响应式规则面板
+
+规则不再默认直接打印 `ufw status numbered` 的长行。菜单会解析容器、端口、来源、Docker 网络和目标 IP，并根据终端宽度自动切换：
+
+```text
+< 80 列      手机卡片视图
+80-109 列    紧凑表格
+>= 110 列    完整表格
+```
+
+规则页支持按容器分组、只看 `ANY` 公开规则、只看指定来源规则、搜索容器以及查看异常规则。菜单还会比较 UFW 目标 IP 与 Docker 当前地址，提示 `IP已变化`、`容器不存在` 或 `容器已停止` 等状态。
+
 ## 主要增强
 
 - `ufw-docker allow` 图形化/菜单化操作；
 - `allow-ip` 按来源 IP 或 CIDR 精确放行；
 - 普通规则和 `from:<SOURCE>` 规则统一查询、删除和重载；
+- 手机卡片 / 紧凑表格 / 完整表格响应式规则视图；
+- 按容器分组、公开规则、指定来源规则和异常规则筛选；
+- UFW 目标 IP 与 Docker 当前地址健康检查；
+- 删除前校验 UFW 编号确属 UFW-Docker 已管理规则；
 - `ufw-docker-rulectl` 提供稳定 TSV 输出；
 - IPv4/IPv6 规则解析和逻辑去重；
 - Docker Swarm service allow/delete；
@@ -124,6 +140,7 @@ bash install.sh --self-test
 ## 文档
 
 - [交互菜单说明](MENU.md)
+- [规则视图与健康检查](RULE_VIEW.md)
 - [一键安装详细说明](ONE_CLICK_INSTALL.md)
 - [来源 IP 规则生命周期](RULE_LIFECYCLE.md)
 - [核心命令菜单覆盖表](COMMAND_COVERAGE.md)

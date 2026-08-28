@@ -39,13 +39,14 @@ install_menu_command() {
 
     install_if_different 0755 "$SCRIPT_PATH" "$INSTALL_BIN"
     local module
-    for module in common validation ui docker rules system app extras installer; do
+    for module in common validation ui docker rules system app extras ruleview installer; do
         install_if_different 0644 "$source_modules/$module.sh" "$INSTALL_MODULE_DIR/$module.sh"
     done
     ln -sfn "$INSTALL_BIN" "$INSTALL_ALIAS"
 
     install_if_different 0644 "$SCRIPT_DIR/MENU.md" "$INSTALL_DOC_DIR/MENU.md"
     install_if_different 0644 "$SCRIPT_DIR/RULE_LIFECYCLE.md" "$INSTALL_DOC_DIR/RULE_LIFECYCLE.md"
+    install_if_different 0644 "$SCRIPT_DIR/RULE_VIEW.md" "$INSTALL_DOC_DIR/RULE_VIEW.md"
     install_if_different 0644 "$SCRIPT_DIR/COMMAND_COVERAGE.md" "$INSTALL_DOC_DIR/COMMAND_COVERAGE.md"
     install_if_different 0644 "$SCRIPT_DIR/ONE_CLICK_INSTALL.md" "$INSTALL_DOC_DIR/ONE_CLICK_INSTALL.md"
     install_if_different 0644 "$SCRIPT_DIR/VERSION" "$INSTALL_DOC_DIR/VERSION"

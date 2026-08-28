@@ -53,7 +53,7 @@ terminal_cols() {
 separator() {
     local width="${1:-$(terminal_cols)}"
     (( width > 110 )) && width=110
-    (( width < 60 )) && width=60
+    (( width < 40 )) && width=40
     printf '%s' "$C_GREEN"
     printf '%*s' "$width" '' | tr ' ' '-'
     printf '%s\n' "$C_RESET"

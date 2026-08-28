@@ -52,6 +52,16 @@ declare -F core_raw_command_prompt >/dev/null
 declare -F core_add_service_rule_prompt >/dev/null
 declare -F enhanced_reload_rules >/dev/null
 declare -F core_install_system_safe >/dev/null
+declare -F show_grouped_rules >/dev/null
+declare -F collect_rule_stats >/dev/null
+declare -F rule_health_eval >/dev/null
+
+rule_parse_line "[33] 172.19.0.2 8888/tcp ALLOW FWD Anywhere # allow hindsight 8888/tcp hindsight_default"
+[[ "$RULEVIEW_NUMBER" == "33" ]]
+[[ "$RULEVIEW_TARGET" == "172.19.0.2" ]]
+[[ "$RULEVIEW_CONTAINER" == "hindsight" ]]
+[[ "$RULEVIEW_PORT_PROTO" == "8888/tcp" ]]
+[[ -z "$RULEVIEW_SOURCE" ]]
 
 old_dry_run="$DRY_RUN"
 DRY_RUN=1
@@ -60,7 +70,7 @@ DRY_RUN="$old_dry_run"
 [[ "$install_plan" == *"ufw-docker"* ]]
 [[ "$install_plan" == *"install"* ]]
 
-[[ "$(NO_COLOR=1 "$menu" --version)" == "1.3.0" ]]
+[[ "$(NO_COLOR=1 "$menu" --version)" == "1.4.0" ]]
 NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 "$menu" --self-test >/dev/null
 NO_COLOR=1 COLUMNS=120 "$menu" --print-main-menu | grep -Fq "UFW-DOCKER"
 
