@@ -19,7 +19,9 @@ declare -F update_remote_version >/dev/null
 grep -Fq 'https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/install.sh' \
     "$root_dir/lib/ufw-docker-menu/updater.sh"
 
-grep -Fq 'REPO=\"wyyzcjw/ufw-docker\"' \
+grep -Fq 'REPO="wyyzcjw/ufw-docker"' \
+    "$root_dir/install.sh"
+grep -Fq "REPO=\"wyyzcjw/ufw-docker\"" \
     "$root_dir/lib/ufw-docker-menu/updater.sh"
 
 version_is_newer 2.0.0 1.9.9
