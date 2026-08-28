@@ -66,10 +66,16 @@ version_numeric_parts() {
 
 version_is_newer() {
     local remote="${1:-}" local_version="${2:-}"
+    local remote_parts local_parts
     local -a r=() l=()
     local i
-    read -r -a r <<< "$(version_numeric_parts "$remote")" || return 1
-    read -r -a l <<< "$(version_numeric_parts "$local_version")" || return 1
+
+    remote_parts="$(version_numeric_parts "$remote")" || return 1
+    local_parts="$(version_numeric_parts "$local_version")" || return 1
+    read -r -a r <<< "$remote_parts"
+    read -r -a l <<< "$local_parts"
+    (( ${#r[@]} == 4 && ${#l[@]} == 4 )) || return 1
+
     for i in 0 1 2 3; do
         if (( 10#${r[$i]} > 10#${l[$i]} )); then
             return 0
@@ -112,7 +118,10 @@ show_update_security_note() {
 root_update_build_args() {
     local channel="${1:-stable}"
     printf '%s\n' '--install' '--no-run'
-    [[ "$channel" == "dev" ]] && printf '%s\n' '--dev'
+    if [[ "$channel" == "dev" ]]; then
+        printf '%s\n' '--dev'
+    fi
+    return 0
 }
 
 root_update_from_github() {
