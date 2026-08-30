@@ -35,6 +35,10 @@ UFW-Docker 交互管理菜单 $MENU_VERSION
   >= 110 列   完整表格
   菜单会检测容器当前 IP，并标记 IP 已变化、容器不存在或已停止的规则。
 
+来源 IP / CIDR：
+  双栈 Docker 网络会自动按来源地址族过滤目标地址。
+  IPv4 来源只写 IPv4 目标，IPv6 来源只写 IPv6 目标。
+
 环境变量：
   UFW_DOCKER_BIN                      指定 ufw-docker 核心脚本
   UFW_DOCKER_MENU_DRY_RUN=1           仅打印命令，不执行修改
@@ -108,7 +112,7 @@ self_test() {
     fi
 
     local module
-    for module in common validation ui docker rules system app extras ruleview installer updater; do
+    for module in common validation ui docker rules system app extras allowip ruleview installer updater; do
         if [[ -r "$MENU_MODULE_DIR/$module.sh" ]]; then
             printf 'ok - module %s\n' "$module"
         else
@@ -140,8 +144,16 @@ self_test() {
         printf 'not ok - root updater\n' >&2
         failed=1
     }
-    self_test_assert "semantic version newer" version_is_newer "1.5.0" "1.4.0" || failed=1
-    if version_is_newer "1.4.0" "1.5.0"; then
+    declare -F menu_apply_source_rule >/dev/null 2>&1 || {
+        printf 'not ok - family-safe source rule menu helper\n' >&2
+        failed=1
+    }
+    declare -F ufw_docker_apply_source_rule >/dev/null 2>&1 || {
+        printf 'not ok - family-safe lifecycle source rule helper\n' >&2
+        failed=1
+    }
+    self_test_assert "semantic version newer" version_is_newer "1.5.1" "1.5.0" || failed=1
+    if version_is_newer "1.5.0" "1.5.1"; then
         printf 'not ok - semantic version downgrade rejected\n' >&2
         failed=1
     else
