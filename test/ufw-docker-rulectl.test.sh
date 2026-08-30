@@ -54,11 +54,43 @@ delete_output="$(ufw_docker_delete_rules nginx 443/tcp frontend 192.0.2.0/24 1)"
 [[ "$delete_output" == *'delete "3"'* ]]
 [[ "$delete_output" == *"ufw delete 3"* ]]
 
+# Mock a dual-stack container for source-rule dry-run generation. Functions are
+# sufficient for command -v checks and keep this test independent of Docker/UFW.
+docker() {
+    if [[ "${1:-}" == "inspect" && $# -eq 2 ]]; then
+        [[ "$2" == "nginx" ]] && return 0
+        return 1
+    fi
+    if [[ "$*" == *"NetworkSettings.Networks"* ]]; then
+        printf '%s\n' 'frontend|172.18.0.3|fd00::3'
+        return 0
+    fi
+    if [[ "$*" == *"NetworkSettings.Ports"* ]]; then
+        printf '%s\n' '80/tcp' '443/tcp'
+        return 0
+    fi
+    return 1
+}
+
+ufw() {
+    printf 'ufw must not execute during dry-run\n' >&2
+    return 99
+}
+
 reload_output="$(ufw_docker_reload_rules /bin/echo 1)"
 # IPv4/v6 copies of the same ordinary rule are deduplicated.
 [[ "$(grep -c 'nginx 80/tcp frontend' <<< "$reload_output")" -eq 1 ]]
-[[ "$reload_output" == *"allow-ip"* ]]
+# Source rules are rendered as direct family-safe UFW commands, not legacy
+# core allow-ip calls. IPv4 source must never target the IPv6 container address.
+[[ "$reload_output" != *"allow-ip"* ]]
 [[ "$reload_output" == *"192.0.2.0/24"* ]]
+[[ "$reload_output" == *"172.18.0.3"* ]]
+[[ "$reload_output" != *"fd00::3"* ]]
+
+v6_output="$(ufw_docker_apply_source_rule '2001:db8::/64' nginx 443 tcp frontend 1)"
+[[ "$v6_output" == *"2001:db8::/64"* ]]
+[[ "$v6_output" == *"fd00::3"* ]]
+[[ "$v6_output" != *"172.18.0.3"* ]]
 
 parse_output="$(printf '%s\n' 'allow nginx/v6 80/tcp frontend from:2001:db8::/64' | bash "$cli" parse)"
 [[ "$parse_output" == *$'nginx\t80\ttcp\tfrontend\t2001:db8::/64\t1'* ]]
