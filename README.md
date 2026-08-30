@@ -2,7 +2,7 @@
 
 基于 [chaifeng/ufw-docker](https://github.com/chaifeng/ufw-docker) 的增强版，增加交互式管理菜单、来源 IP/CIDR 规则生命周期管理、响应式规则面板、诊断工具，以及适合 VPS 使用的一键下载运行和菜单内 Root 更新方式。
 
-当前工具版本：`1.5.0`
+当前工具版本：`1.5.1`
 
 ## 一键运行
 
@@ -109,6 +109,17 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/in
 
 菜单会自动发现 Docker 容器、已发布端口、宿主机映射、Docker 网络和容器地址。传给 `ufw-docker` 的始终是**容器端口**，而不是宿主机映射端口。
 
+### 指定来源 IP / CIDR 与双栈网络
+
+从 `1.5.1` 起，菜单不再因为 Docker 网络同时存在 IPv4 和 IPv6 地址而拒绝来源 IP 规则。来源地址族会决定实际写入的目标地址族：
+
+```text
+IPv4 来源 IP/CIDR -> 只写 IPv4 容器目标地址
+IPv6 来源 IP/CIDR -> 只写 IPv6 容器目标地址
+```
+
+因此双栈容器可以直接选择原网络，无需额外创建“仅 IPv4”或“仅 IPv6”的 Docker 网络。增强重载和 `ufw-docker-rulectl reload` 使用同一套地址族过滤逻辑，避免出现先写入一部分规则、随后因为 IPv4/IPv6 混用而失败的情况。
+
 ### 响应式规则面板
 
 规则不再默认直接打印 `ufw status numbered` 的长行。菜单会解析容器、端口、来源、Docker 网络和目标 IP，并根据终端宽度自动切换：
@@ -125,6 +136,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wyyzcjw/ufw-docker/master/in
 
 - `ufw-docker allow` 图形化/菜单化操作；
 - `allow-ip` 按来源 IP 或 CIDR 精确放行；
+- 双栈 Docker 网络按来源地址族自动过滤目标地址；
 - 普通规则和 `from:<SOURCE>` 规则统一查询、删除和重载；
 - 手机卡片 / 紧凑表格 / 完整表格响应式规则视图；
 - 按容器分组、公开规则、指定来源规则和异常规则筛选；
