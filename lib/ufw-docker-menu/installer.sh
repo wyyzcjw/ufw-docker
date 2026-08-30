@@ -39,7 +39,7 @@ install_menu_command() {
 
     install_if_different 0755 "$SCRIPT_PATH" "$INSTALL_BIN"
     local module
-    for module in common validation ui docker rules system app extras ruleview installer updater; do
+    for module in common validation ui docker rules system app extras allowip ruleview installer updater; do
         install_if_different 0644 "$source_modules/$module.sh" "$INSTALL_MODULE_DIR/$module.sh"
     done
     ln -sfn "$INSTALL_BIN" "$INSTALL_ALIAS"

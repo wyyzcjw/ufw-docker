@@ -126,6 +126,113 @@ ufw_docker_validate_port_proto() {
     (( BASH_REMATCH[1] >= 1 && BASH_REMATCH[1] <= 65535 ))
 }
 
+ufw_docker_source_family() {
+    [[ "${1:-}" == *:* ]] && printf '6\n' || printf '4\n'
+}
+
+ufw_docker_container_network_rows() {
+    local instance="${1:?missing container}"
+    docker inspect --format \
+        '{{range $name,$net := .NetworkSettings.Networks}}{{$name}}{{"|"}}{{$net.IPAddress}}{{"|"}}{{$net.GlobalIPv6Address}}{{"\n"}}{{end}}' \
+        "$instance" 2>/dev/null | sed '/^[[:space:]]*$/d'
+}
+
+ufw_docker_container_published_ports() {
+    local instance="${1:?missing container}"
+    docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' \
+        "$instance" 2>/dev/null | sed '/^[[:space:]]*$/d' | sort -u
+}
+
+# Apply a source-restricted rule without crossing IP families. The original
+# fork core allow-ip walks both IPv4 and IPv6 container targets; pairing an
+# IPv4 source with an IPv6 target (or vice versa) can make UFW fail after some
+# rules were already written. This helper deliberately selects only targets in
+# the same family as SOURCE and is shared by the menu and lifecycle reload.
+ufw_docker_apply_source_rule() {
+    local source="${1:?missing source}"
+    local instance="${2:?missing container}"
+    local requested_port="${3:-}"
+    local requested_proto="${4:-}"
+    local network="${5:-}"
+    local dry_run="${6:-0}"
+    local source_family row name ipv4 ipv6 target suffix port_proto port proto comment
+    local count=0 failed=0
+    local -a rows=() ports=() command=()
+
+    command -v docker >/dev/null 2>&1 || {
+        printf 'docker executable not found\n' >&2
+        return 1
+    }
+    command -v ufw >/dev/null 2>&1 || {
+        printf 'ufw executable not found\n' >&2
+        return 1
+    }
+    docker inspect "$instance" >/dev/null 2>&1 || {
+        printf 'Docker instance "%s" does not exist.\n' "$instance" >&2
+        return 1
+    }
+
+    if [[ -n "$requested_port" || -n "$requested_proto" ]]; then
+        [[ -n "$requested_port" && -n "$requested_proto" ]] || {
+            printf 'port and protocol must be provided together\n' >&2
+            return 2
+        }
+    fi
+
+    mapfile -t rows < <(ufw_docker_container_network_rows "$instance")
+    mapfile -t ports < <(ufw_docker_container_published_ports "$instance")
+    (( ${#rows[@]} > 0 )) || {
+        printf 'Could not find a running instance "%s".\n' "$instance" >&2
+        return 1
+    }
+    (( ${#ports[@]} > 0 )) || {
+        printf '"%s" does not have any published ports.\n' "$instance" >&2
+        return 1
+    }
+
+    source_family="$(ufw_docker_source_family "$source")"
+    for port_proto in "${ports[@]}"; do
+        port="${port_proto%/*}"
+        proto="${port_proto#*/}"
+        if [[ -n "$requested_port" ]] &&
+           [[ "$port" != "$requested_port" || "$proto" != "$requested_proto" ]]; then
+            continue
+        fi
+
+        for row in "${rows[@]}"; do
+            IFS='|' read -r name ipv4 ipv6 <<< "$row"
+            [[ -z "$network" || "$name" == "$network" ]] || continue
+
+            if [[ "$source_family" == "4" ]]; then
+                target="$ipv4"
+                suffix=""
+            else
+                target="$ipv6"
+                suffix="/v6"
+            fi
+            [[ -n "$target" ]] || continue
+
+            comment="allow ${instance}${suffix} ${port}/${proto} ${name} from:${source}"
+            command=(ufw route allow proto "$proto" from "$source" to "$target" port "$port" comment "$comment")
+
+            printf 'source-rule: '
+            printf '%q ' "${command[@]}"
+            printf '\n'
+            if [[ "$dry_run" != "1" ]] && ! "${command[@]}"; then
+                failed=1
+            fi
+            (( ++count ))
+        done
+    done
+
+    if (( count == 0 )); then
+        printf 'No matching IPv%s target/published-port combination for %s.\n' \
+            "$source_family" "$instance" >&2
+        return 1
+    fi
+    (( failed == 0 ))
+}
+
 ufw_docker_managed_status_lines() {
     LC_ALL=C ufw status numbered 2>/dev/null |
         grep -F 'ALLOW FWD' |
@@ -244,10 +351,20 @@ ufw_docker_reload_rules() {
         seen["$key"]=1
 
         if [[ -n "$UFW_DOCKER_RULE_SOURCE" ]]; then
-            command=("$core" allow-ip "$UFW_DOCKER_RULE_SOURCE" "$UFW_DOCKER_RULE_INSTANCE")
-        else
-            command=("$core" allow "$UFW_DOCKER_RULE_INSTANCE")
+            printf 'reload source rule: %s\n' "$key"
+            if ! ufw_docker_apply_source_rule \
+                "$UFW_DOCKER_RULE_SOURCE" \
+                "$UFW_DOCKER_RULE_INSTANCE" \
+                "$UFW_DOCKER_RULE_PORT" \
+                "$UFW_DOCKER_RULE_PROTO" \
+                "$UFW_DOCKER_RULE_NETWORK" \
+                "$dry_run"; then
+                failures+=("failed: $key")
+            fi
+            continue
         fi
+
+        command=("$core" allow "$UFW_DOCKER_RULE_INSTANCE")
         [[ -n "$UFW_DOCKER_RULE_PORT" ]] && command+=("${UFW_DOCKER_RULE_PORT}/${UFW_DOCKER_RULE_PROTO}")
         [[ -n "$UFW_DOCKER_RULE_NETWORK" ]] && command+=("$UFW_DOCKER_RULE_NETWORK")
 

@@ -58,10 +58,20 @@ declare -F rule_health_eval >/dev/null
 declare -F check_updates >/dev/null
 declare -F root_update_from_github >/dev/null
 declare -F update_remote_version >/dev/null
+declare -F menu_apply_source_rule >/dev/null
+declare -F ufw_docker_apply_source_rule >/dev/null
 
-version_is_newer "1.5.0" "1.4.0"
-! version_is_newer "1.4.0" "1.5.0"
-! version_is_newer "1.5.0" "1.5.0"
+# A dual-stack Docker network is valid for either source family. The menu will
+# later write only targets matching the source address family.
+container_networks() {
+    printf '%s\n' 'frontend|172.18.0.3|fd00::3'
+}
+validate_source_family_for_scope "192.0.2.10" nginx frontend
+validate_source_family_for_scope "2001:db8::10" nginx frontend
+
+version_is_newer "1.5.1" "1.5.0"
+! version_is_newer "1.5.0" "1.5.1"
+! version_is_newer "1.5.1" "1.5.1"
 
 mapfile -t stable_args < <(root_update_build_args stable)
 [[ "${stable_args[*]}" == "--install --no-run" ]]
@@ -82,7 +92,7 @@ DRY_RUN="$old_dry_run"
 [[ "$install_plan" == *"ufw-docker"* ]]
 [[ "$install_plan" == *"install"* ]]
 
-[[ "$(NO_COLOR=1 "$menu" --version)" == "1.5.0" ]]
+[[ "$(NO_COLOR=1 "$menu" --version)" == "1.5.1" ]]
 NO_COLOR=1 UFW_DOCKER_MENU_TESTING=1 "$menu" --self-test >/dev/null
 NO_COLOR=1 COLUMNS=120 "$menu" --print-main-menu | grep -Fq "UFW-DOCKER"
 NO_COLOR=1 COLUMNS=120 "$menu" --print-main-menu | grep -Fq "检查 / 更新菜单"
